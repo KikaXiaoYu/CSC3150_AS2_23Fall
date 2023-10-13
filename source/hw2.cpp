@@ -36,6 +36,7 @@ int kbhit(void);
 void map_print(void);
 int rand_num_gen(void);
 int get_mod(int, int);
+bool is_frog_on_log(int, int, int);
 /* logs helping functions */
 void logs_shifting(int, int);
 void logs_initial(int);
@@ -44,6 +45,7 @@ void frog_move_help(char ch);
 /* pthread functions */
 void *screen_print(void *t);
 void *logs_move(void *t);
+void *status_judge(void *t);
 
 // Determine a keyboard is hit or not. If yes, return 1. If not, return 0.
 int kbhit(void)
@@ -362,7 +364,8 @@ int main(int argc, char *argv[])
 		break;
 	}
 
-	/* exit the pthread */
+	/* destroy mutex and exit the pthread */
+	pthread_mutex_destroy(&wood_lock);
 	pthread_exit(NULL);
 
 	return 0;
