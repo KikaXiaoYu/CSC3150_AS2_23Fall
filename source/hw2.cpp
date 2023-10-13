@@ -12,6 +12,8 @@
 #define ROW 10
 #define COLUMN 50
 #define LOG_LEN 15
+#define LOG_DELAY 120000
+#define PRINT_DELAY 13000
 
 /* struct for the frog */
 struct Node
@@ -27,12 +29,21 @@ int log_center[ROW + 1];
 int game_status; // 0 for run, 1 for win, 2 for lose, 3 for quit
 
 /* global pthread variables */
-pthread_mutex_t lock;
-pthread_mutex_t screen_lock;
+pthread_mutex_t wood_lock;
 
+/* useful helping functions */
 int kbhit(void);
-
-void Delay();
+void map_print(void);
+int rand_num_gen(void);
+int get_mod(int, int);
+/* logs helping functions */
+void logs_shifting(int, int);
+void logs_initial(int);
+/* frog move helping functions */
+void frog_move_help(char ch);
+/* pthread functions */
+void *screen_print(void *t);
+void *logs_move(void *t);
 
 // Determine a keyboard is hit or not. If yes, return 1. If not, return 0.
 int kbhit(void)
@@ -65,41 +76,46 @@ int kbhit(void)
 }
 
 /* print the map */
-void map_print()
+void map_print(void)
 {
-	// printf("\033[2J");
-
 	printf("\033[H\033[2J"); // clean the terminal
 	int i;
 	for (i = 0; i <= ROW; ++i)
 		puts(map[i]);
-	printf("\033[H");
-}
-
-void map_clean()
-{
-	// printf("\033[2J");
-	// system("clear");
 }
 
 /* generate random number from 0 to COLUMN-1 */
-int rand_num_gen()
+int rand_num_gen(void)
 {
 	int rand_num = rand() % (COLUMN - 1);
 	return rand_num;
 }
 
+/* get the num with mod */
 int get_mod(int num, int mod)
 {
 	return (num + mod) % (mod);
 }
 
-/* shift the logs */
+bool is_frog_on_log(int row, int x, int y)
+{
+	if (x != row)
+		return false;
+	int half_log = LOG_LEN / 2;
+	int center = log_center[row];
+	if (((y - center <= half_log) && (y - center >= -half_log)) ||
+		((y - center >= COLUMN - 1 - half_log) || (y - center <= half_log - COLUMN + 1)))
+		return true;
+	else
+		return false;
+}
+
+/* shift the logs in map */
 void logs_shifting(int row, int direc)
 {
 	int left_end;
 	int right_end;
-	int center = log_center[row];
+	int center = get_mod(log_center[row], COLUMN - 1);
 	int half_log = LOG_LEN / 2;
 
 	switch (direc)
@@ -109,6 +125,14 @@ void logs_shifting(int row, int direc)
 		right_end = get_mod(center + half_log, COLUMN - 1);
 		map[row][left_end] = '=';
 		map[row][right_end] = ' ';
+		if (is_frog_on_log(row, frog.x, frog.y))
+		{
+			map[row][frog.y] = '=';
+			if (frog.y == right_end)
+				map[row][frog.y] = ' ';
+			frog.y = get_mod(frog.y - 1, COLUMN - 1);
+			map[row][frog.y] = '0';
+		}
 		log_center[row] = get_mod(center - 1, COLUMN - 1);
 		break;
 	case 0: // right
@@ -116,6 +140,14 @@ void logs_shifting(int row, int direc)
 		right_end = get_mod(center + half_log + 1, COLUMN - 1);
 		map[row][left_end] = ' ';
 		map[row][right_end] = '=';
+		if (is_frog_on_log(row, frog.x, frog.y))
+		{
+			map[row][frog.y] = '=';
+			if (frog.y == left_end)
+				map[row][frog.y] = ' ';
+			frog.y = get_mod(frog.y + 1, COLUMN - 1);
+			map[row][frog.y] = '0';
+		}
 		log_center[row] = get_mod(center + 1, COLUMN - 1);
 		break;
 	default:
@@ -123,11 +155,10 @@ void logs_shifting(int row, int direc)
 	}
 }
 
-/* initalize the logs randomly */
-static void logs_initial(long row)
+/* initalize the logs randomly in map */
+void logs_initial(int row)
 {
 	int center = rand_num_gen();
-	// int center = 45;
 	log_center[row] = center;
 
 	int j;
@@ -141,129 +172,181 @@ static void logs_initial(long row)
 	}
 }
 
-void Delay(int num)
-{
-	for (int i = 0; i < num; i++)
-		;
-}
-
+/* screen print thread */
 void *screen_print(void *t)
 {
 	while (1)
 	{
-		// pthread_mutex_lock(&screen_lock);
-		// Delay(0x000FFFFF);
-		pthread_mutex_lock(&screen_lock);
-
 		map_print();
-		pthread_mutex_unlock(&screen_lock);
-		usleep(10000);
-		// pthread_mutex_unlock(&screen_lock);
+
+		/* Check game's status */
+		if (game_status != 0)
+			pthread_exit(NULL);
+
+		usleep(PRINT_DELAY);
 	}
 };
 
-void *screen_clean(void *t)
-{
-	while (1)
-	{
-		// pthread_mutex_lock(&screen_lock);
-		map_clean();
-		// pthread_mutex_unlock(&screen_lock);
-		// sleep(1);
-	}
-};
-
-/* threads function */
+/* log threads function */
 void *logs_move(void *t)
 {
 	long row = (long)t;	  // log number
 	long direc = row % 2; // log direction, 1 for left, 0 for right
-
-	pthread_mutex_lock(&lock);
+	pthread_mutex_lock(&wood_lock);
 	logs_initial(row);
-	// map_print();
-	pthread_mutex_unlock(&lock);
-
+	pthread_mutex_unlock(&wood_lock);
 	while (1)
 	{
 		/* Move the logs */
-		pthread_mutex_lock(&lock);
-
+		pthread_mutex_lock(&wood_lock);
 		logs_shifting(row, direc);
-		// map_print((void *)1);
-		pthread_mutex_unlock(&lock);
-		// Delay(0x000FFFFF);
-		usleep(30000);
+		/* Move the frog */
+		if (kbhit())
+		{
+			char ch = getchar();
+			frog_move_help(ch);
+		}
+		pthread_mutex_unlock(&wood_lock);
+		/* Check game's status */
+		if (game_status != 0)
+			pthread_exit(NULL);
+
+		usleep(LOG_DELAY);
 	}
+}
 
-	/* Check keyboard hits, to change frog's position or quit the game. */
+/* help moving the frog */
+void frog_move_help(char ch)
+{
+	int old_x = frog.x;
+	int old_y = frog.y;
+	int half_log = LOG_LEN / 2;
+	int center = log_center[old_x];
+	/* process previous entry */
+	if (old_x == ROW || old_x == 0) // frog is on the bottom bank
+		map[old_x][old_y] = '|';
+	else if (old_x != ROW && old_x != 0) // frog is on the river
+	{
+		if (is_frog_on_log(old_x, old_x, old_y))
+			map[old_x][old_y] = '=';
+		else
+			map[old_x][old_y] = ' ';
+	}
+	/* move the frog index */
+	switch (ch)
+	{
+	case 'W': case 'w':
+		if (frog.x != 0)
+			frog.x -= 1;
+		break;
+	case 'S': case 's':
+		if (frog.x != ROW)
+			frog.x += 1;
+		break;
+	case 'A': case 'a':
+		if (frog.y != 0)
+			frog.y -= 1;
+		break;
+	case 'D': case 'd':
+		if (frog.y != COLUMN - 2)
+			frog.y += 1;
+		break;
+	case 'Q': case 'q':
+		game_status = 3;
+		break;
+	default:
+		break;
+	}
+	/* set new frog on map */
+	map[frog.x][frog.y] = '0';
+}
 
-	/* Check game's status */
-
-	/* Print the map on the screen */
+/* judge the status all the time */
+void *status_judge(void *t)
+{
+	while (1)
+	{
+		pthread_mutex_lock(&wood_lock);
+		/* Check game's status */
+		if (game_status != 0)
+		{
+			pthread_mutex_unlock(&wood_lock);
+			pthread_exit(NULL);
+		}
+		/* Check if the frog is on the top bank */
+		if (frog.x == 0)
+		{
+			game_status = 1; // win the game
+			pthread_mutex_unlock(&wood_lock);
+			pthread_exit(NULL);
+		}
+		/* Check if the frog touches the edge */
+		else if (frog.y == 0 || frog.y == COLUMN - 2)
+		{
+			game_status = 2; // lose the game
+			pthread_mutex_unlock(&wood_lock);
+			pthread_exit(NULL);
+		}
+		/* Check if the frog is on the river */
+		else if (frog.x != ROW && frog.x != 0)
+		{
+			if (!is_frog_on_log(frog.x, frog.x, frog.y))
+			{
+				game_status = 2; // lose the game
+				pthread_mutex_unlock(&wood_lock);
+				pthread_exit(NULL);
+			}
+		}
+		pthread_mutex_unlock(&wood_lock);
+	}
 }
 
 int main(int argc, char *argv[])
 {
+	srand(time(NULL)); // set random seeds (for logs init usage)
+	int i, j;		   // iterating variables
 
-	// set random seeds
-	srand(time(NULL));
-	// Initialize the river map and frog's starting position
+	/* Initialize the river map and frog's starting position */
 	memset(map, 0, sizeof(map)); // set all the chars(1 byte each) of the map to '0'
-	int i, j;
-
-	// create the empty river
-	for (i = 1; i < ROW; ++i)
+	for (i = 1; i < ROW; ++i)	 // create the empty river
 	{
 		for (j = 0; j < COLUMN - 1; ++j)
 			map[i][j] = ' ';
 	}
-
-	// create the bottom bank
-	for (j = 0; j < COLUMN - 1; ++j)
+	for (j = 0; j < COLUMN - 1; ++j) // create the bottom bank with len (COLUMM - 1)
 		map[ROW][j] = map[0][j] = '|';
-
-	// create the top bank
-	for (j = 0; j < COLUMN - 1; ++j)
+	for (j = 0; j < COLUMN - 1; ++j) // create the top bank with len (COLUMM - 1)
 		map[0][j] = map[0][j] = '|';
-
 	frog = Node(ROW, (COLUMN - 1) / 2); // create the frog
 	map[frog.x][frog.y] = '0';			// put the frog on the map
 
-	// Print the map into screen
-	system("clear");
-	// printf("\033[?25l");
-
+	/* clean the terminal and set game status */
+	printf("\033[2J");
 	map_print();
 	game_status = 0;
 
-	pthread_mutex_init(&lock, NULL);
-	pthread_mutex_init(&screen_lock, NULL);
+	/* Initialize the mutex for wood move */
+	pthread_mutex_init(&wood_lock, NULL);
 
 	/* Create pthreads for wood move and frog control. */
-	pthread_t wood_threads[ROW]; // 0 for none, others for wood
+	pthread_t wood_threads[ROW]; // 0 for frog, others for wood
 	for (i = 1; i <= ROW - 1; i++)
 		pthread_create(&wood_threads[i], NULL, logs_move, (void *)(long)i);
 
-	/* Create pthreads for screen print and clean */
-	pthread_t screen_threads[1]; // 0 for print, 1 fo clean
-	pthread_create(&wood_threads[0], NULL, screen_print, NULL);
-	pthread_create(&wood_threads[1], NULL, screen_clean, NULL);
+	/* Create pthreads for screen print and game status */
+	pthread_t control_threads[2]; // 0 for print, and 1 for status
+	pthread_create(&control_threads[0], NULL, screen_print, NULL);
+	pthread_create(&control_threads[1], NULL, status_judge, NULL);
 
 	/* join all the threads */
 	for (i = 1; i <= ROW - 1; i++)
-	{
 		pthread_join(wood_threads[i], NULL);
-	}
-
 	for (i = 0; i <= 1; i++)
-	{
-		pthread_join(screen_threads[i], NULL);
-	}
+		pthread_join(control_threads[i], NULL);
 
 	/* Display the output for user: win, lose or quit. */
-	system("clear");
-
+	printf("\033[2J"); // clean the terminal
+	printf("\033[H");  // move the cursor to the top left corner
 	switch (game_status)
 	{
 	case 1:
@@ -276,12 +359,10 @@ int main(int argc, char *argv[])
 		printf("You exit the game!!\n");
 		break;
 	default:
-		printf("An unexpected error occurred.\n");
-		printf("I am just a human.\n");
-		printf("I cannot handle everything.\n");
 		break;
 	}
 
+	/* exit the pthread */
 	pthread_exit(NULL);
 
 	return 0;
