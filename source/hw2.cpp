@@ -237,23 +237,28 @@ void frog_move_help(char ch)
 	/* move the frog index */
 	switch (ch)
 	{
-	case 'W': case 'w':
+	case 'W':
+	case 'w':
 		if (frog.x != 0)
 			frog.x -= 1;
 		break;
-	case 'S': case 's':
+	case 'S':
+	case 's':
 		if (frog.x != ROW)
 			frog.x += 1;
 		break;
-	case 'A': case 'a':
+	case 'A':
+	case 'a':
 		if (frog.y != 0)
 			frog.y -= 1;
 		break;
-	case 'D': case 'd':
+	case 'D':
+	case 'd':
 		if (frog.y != COLUMN - 2)
 			frog.y += 1;
 		break;
-	case 'Q': case 'q':
+	case 'Q':
+	case 'q':
 		game_status = 3;
 		break;
 	default:
@@ -358,7 +363,7 @@ int main(int argc, char *argv[])
 		printf("You lose the game!!\n");
 		break;
 	case 3:
-		printf("You exit the game!!\n");
+		printf("You exit the game.\n");
 		break;
 	default:
 		break;
