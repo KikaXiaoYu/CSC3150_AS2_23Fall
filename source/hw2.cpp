@@ -288,7 +288,7 @@ void *status_judge(void *t)
 			pthread_exit(NULL);
 		}
 		/* Check if the frog touches the edge */
-		else if (frog.y == 0 || frog.y == COLUMN - 2)
+		else if (frog.x != ROW && (frog.y == 0 || frog.y == COLUMN - 2))
 		{
 			game_status = 2; // lose the game
 			pthread_mutex_unlock(&wood_lock);
