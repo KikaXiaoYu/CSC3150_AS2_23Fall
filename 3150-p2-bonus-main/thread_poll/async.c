@@ -87,7 +87,7 @@ void async_run(void (*hanlder)(int), int args)
 
     /* create a new job pointer, allocate memory */
     my_item_t *web_job = (my_item_t *)malloc(sizeof(my_item_t));
-    
+
     web_job->hanlder = hanlder;
     web_job->args = args;
 
