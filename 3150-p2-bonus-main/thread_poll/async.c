@@ -5,113 +5,99 @@
 #include "utlist.h"
 #include <stdio.h>
 
-my_queue_t *pool;
+/* global define the thread pool */
+my_queue_t pool;
 
-void *threadpool_function(void *arg)
+/* the function of each pthread */
+void *foo(void *t)
 {
-    // my_queue_t *pool = (my_queue_t *)arg;
-    my_item_t *pjob;
+    my_item_t *web_job;
 
     while (1)
     {
-        pthread_mutex_lock(&pool->mutex);
-        while (pool->queue_cur_num == 0) // 线程启动时需要等待任务被添加到任务队列，否则后续操作有内存安全隐患
-        {
-            // printf("pool->queue_cur_num == 0\n");
-            pthread_cond_wait(&pool->queue_not_empty, &pool->mutex);
-        }
-        printf("func after wait1\n");
-        pjob = pool->head; // 从任务队列中取任务
-        pool->queue_cur_num--;
-        if (pool->queue_cur_num == pool->queue_max_num)
-        {
-            pthread_cond_broadcast(&pool->queue_is_full);
-        }
-        if (pool->queue_cur_num == 0) // 取完判断队列是否为空
-        {
-            pool->head = pool->tail = NULL;
-            pthread_cond_broadcast(&pool->queue_is_empty);
-        }
-        else
-        {
-            pool->head = pool->head->next;
-        }
-        pthread_mutex_unlock(&pool->mutex);
+        pthread_mutex_lock(&pool.mutex);
 
-        pjob->func(pjob->arg);
-        free(pjob);
-        pjob = NULL;
+        while (pool.cur_num == 0)
+        {
+            pthread_cond_wait(&pool.not_empty, &pool.mutex);
+        }
+
+        web_job = pool.head; // fetch the job
+        pool.cur_num--;      // update the queue number
+
+        /* after fetching, update the pool */
+        if (web_job->next_pt == NULL) // if the queue is empty
+        {
+            pool.head = NULL; // empty the head
+            pool.tail = NULL; // empty the tail
+            pthread_cond_broadcast(&pool.is_empty);
+        }
+        else // if the queue is not empty
+        {
+            pool.head = web_job->next_pt;     // update the head item
+            web_job->next_pt->prev_pt = NULL; // update the head's prev
+        }
+
+        web_job->hanlder(web_job->args); // do the job
+
+        /* free the memory of the job */
+        free(web_job);
+        web_job = NULL;
+        printf("One job has been done!\n");
+        pthread_mutex_unlock(&pool.mutex);
     }
-    printf("func break final\n");
 }
 
 void async_init(int num_threads)
 {
+    pool.cur_num = 0;
+    pool.head = NULL;
+    pool.tail = NULL;
 
-    pool = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
+    printf("Inialializing mutex and conditon variables...\n");
+    pthread_mutex_init(&pool.mutex, NULL);
+    pthread_cond_init(&pool.is_empty, NULL);
+    pthread_cond_init(&pool.not_empty, NULL);
 
-    printf("break0\n");
-    pool->queue_cur_num = 0;
-    pool->queue_max_num = 50;
-    pool->head = NULL;
-    pool->tail = NULL;
+    printf("Initializing threads...\n");
+    pool.thread_num = num_threads;
+    pool.pthreads = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
 
-    printf("break1\n");
-
-    pthread_mutex_init(&pool->mutex, NULL);
-    // judge conditions
-    pthread_cond_init(&pool->queue_is_full, NULL);
-    pthread_cond_init(&pool->queue_not_full, NULL);
-    pthread_cond_init(&pool->queue_is_empty, NULL);
-    pthread_cond_init(&pool->queue_not_empty, NULL);
-    printf("break2\n");
-
-    pool->thread_num = num_threads;
-    pool->pthread_ids = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
-
-    for (int i = 0; i < pool->thread_num; i++)
+    for (int i = 0; i < pool.thread_num; i++)
     {
-        printf("what break? %d\n", i);
-        pthread_create(&(pool->pthread_ids[i]), NULL, threadpool_function, (void *)pool);
+        pthread_create(&(pool.pthreads[i]), NULL, foo, (void *)i);
     }
-    printf("break3\n");
 
     return;
-    /** TODO: create num_threads threads and initialize the thread pool **/
 }
 
 void async_run(void (*hanlder)(int), int args)
 {
-    printf("run break0\n");
-    pthread_mutex_lock(&pool->mutex);
-    if (pool->queue_cur_num == pool->queue_max_num)
+    pthread_mutex_lock(&pool.mutex);
+
+    /* create a new job pointer */
+    my_item_t *web_job = (my_item_t *)malloc(sizeof(my_item_t));
+    web_job->hanlder = hanlder;
+    web_job->args = args;
+
+    /* update the pool */
+    if (pool.head == NULL) // if the queue is empty
     {
-        pthread_cond_wait(&pool->queue_not_full, &pool->mutex);
+        pool.head = web_job;
+        pool.tail = web_job;
+        pthread_cond_broadcast(&pool.not_empty);
+    }
+    else // if the queue is not empty
+    {
+        web_job->prev_pt = pool.tail;
+        pool.tail->next_pt = web_job;
+        pool.tail = web_job;
     }
 
-    my_item_t *pjob = (my_item_t *)malloc(sizeof(my_item_t));
+    /* update the queue number */
+    pool.cur_num++;
 
-    pjob->func = (void *)hanlder;
-    pjob->arg = (void *)args;
-    pjob->next == NULL;
-    pjob->prev == NULL;
-    printf("my job\n");
+    pthread_mutex_unlock(&pool.mutex);
 
-    if (pool->head == NULL)
-    {
-        pool->head = pool->tail = pjob;
-        printf("get the good\n");
-        pthread_cond_broadcast(&pool->queue_not_empty);
-    }
-    else
-    {
-        pool->tail->next = pjob;
-        pool->tail = pjob;
-    }
-
-    pool->queue_cur_num++;
-
-    pthread_mutex_unlock(&pool->mutex);
-
-    /** TODO: rewrite it to support thread pool **/
+    return;
 }

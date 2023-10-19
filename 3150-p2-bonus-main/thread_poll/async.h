@@ -5,28 +5,25 @@
 
 typedef struct my_item
 {
-  void *(*func)(void *arg);
-  void *arg;
-  struct my_item *next;
-  struct my_item *prev;
+    void (*hanlder)(int);
+    int args;
+    struct my_item *next_pt;
+    struct my_item *prev_pt;
 } my_item_t;
 
 typedef struct my_queue
 {
-  int thread_num;         // the thread number
-  pthread_t *pthread_ids; // thread ids
+    int thread_num;      // the thread number
+    pthread_t *pthreads; // pthreads
 
-  my_item_t *head; // head of queue
-  my_item_t *tail; // tail of queue
+    my_item_t *head; // head of queue
+    my_item_t *tail; // tail of queue
 
-  int queue_max_num; // max number of queue
-  int queue_cur_num; // current number of queue
+    int cur_num; // current number of queue
 
-  pthread_mutex_t mutex;          // to lock the src access
-  pthread_cond_t queue_is_full;   // queue is full
-  pthread_cond_t queue_not_full;  // queue not full
-  pthread_cond_t queue_is_empty;  // queue is empty
-  pthread_cond_t queue_not_empty; // queue not empty
+    pthread_mutex_t mutex;    // mutex
+    pthread_cond_t is_empty;  // queue is empty
+    pthread_cond_t not_empty; // queue is not empty
 } my_queue_t;
 
 void async_init(int);
