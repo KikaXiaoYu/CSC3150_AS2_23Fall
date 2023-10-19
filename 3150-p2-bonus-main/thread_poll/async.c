@@ -20,10 +20,8 @@ void *foo(void *t)
         pthread_mutex_lock(&pool->mutex);
 
         while (pool->cur_num == 0)
-        {
             // printf("[foo%d] : No job in the pool, waiting for it.\n", t);
             pthread_cond_wait(&pool->empty_false, &pool->mutex);
-        }
 
         // printf("[foo%d] : Fetching the job...\n", t);
         web_job = pool->head; // fetch the job
@@ -48,8 +46,8 @@ void *foo(void *t)
         // printf("[foo%d] : Update the pool successfully!\n", t);
 
         pool->cur_num--; // update the queue number
-
         pthread_mutex_unlock(&pool->mutex);
+
         web_job->hanlder(web_job->args); // do the job
 
         /* free the memory of the job */
@@ -71,14 +69,11 @@ void async_init(int num_threads)
     pthread_cond_init(&pool->empty_false, NULL);
 
     // printf("[Init] : Initializing threads...\n");
-    pool->thread_num = num_threads;
     pool->pthreads = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
 
-    for (int i = 0; i < pool->thread_num; i++)
-    {
+    for (int i = 0; i < num_threads; i++)
         // printf("[Init] : Creating pthread [%d]...\n", i);
         pthread_create(&(pool->pthreads[i]), NULL, foo, (void *)i);
-    }
     // printf("[Init] : Initialize the pool successfully!\n");
 
     return;
@@ -92,6 +87,7 @@ void async_run(void (*hanlder)(int), int args)
 
     /* create a new job pointer, allocate memory */
     my_item_t *web_job = (my_item_t *)malloc(sizeof(my_item_t));
+    
     web_job->hanlder = hanlder;
     web_job->args = args;
 
