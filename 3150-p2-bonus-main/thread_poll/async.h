@@ -22,8 +22,8 @@ typedef struct my_queue
     int cur_num; // current number of queue
 
     pthread_mutex_t mutex;    // mutex
-    pthread_cond_t is_empty;  // queue is empty
-    pthread_cond_t not_empty; // queue is not empty
+    pthread_cond_t empty_true;  // queue is empty
+    pthread_cond_t empty_false; // queue is not empty
 } my_queue_t;
 
 void async_init(int);
