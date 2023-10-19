@@ -9,22 +9,24 @@ my_queue_t *pool;
 
 void *threadpool_function(void *arg)
 {
-    my_queue_t *pool = (my_queue_t *)arg;
-    my_item_t *pjob = NULL;
+    // my_queue_t *pool = (my_queue_t *)arg;
+    my_item_t *pjob;
 
     while (1)
     {
         pthread_mutex_lock(&pool->mutex);
         while (pool->queue_cur_num == 0) // 线程启动时需要等待任务被添加到任务队列，否则后续操作有内存安全隐患
         {
+            // printf("pool->queue_cur_num == 0\n");
             pthread_cond_wait(&pool->queue_not_empty, &pool->mutex);
         }
+        printf("func after wait1\n");
         pjob = pool->head; // 从任务队列中取任务
         pool->queue_cur_num--;
-        if(pool->queue_cur_num == pool->queue_max_num)
-		{
-			pthread_cond_broadcast(&pool->queue_is_full);
-		}
+        if (pool->queue_cur_num == pool->queue_max_num)
+        {
+            pthread_cond_broadcast(&pool->queue_is_full);
+        }
         if (pool->queue_cur_num == 0) // 取完判断队列是否为空
         {
             pool->head = pool->tail = NULL;
@@ -67,8 +69,9 @@ void async_init(int num_threads)
     pool->thread_num = num_threads;
     pool->pthread_ids = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
 
-    for (int i; i < pool->thread_num; i++)
+    for (int i = 0; i < pool->thread_num; i++)
     {
+        printf("what break? %d\n", i);
         pthread_create(&(pool->pthread_ids[i]), NULL, threadpool_function, (void *)pool);
     }
     printf("break3\n");
@@ -81,19 +84,23 @@ void async_run(void (*hanlder)(int), int args)
 {
     printf("run break0\n");
     pthread_mutex_lock(&pool->mutex);
-    while (pool->queue_cur_num == pool->queue_max_num)
+    if (pool->queue_cur_num == pool->queue_max_num)
     {
         pthread_cond_wait(&pool->queue_not_full, &pool->mutex);
     }
 
     my_item_t *pjob = (my_item_t *)malloc(sizeof(my_item_t));
 
-    pjob->func = hanlder;
-    pjob->arg = args;
+    pjob->func = (void *)hanlder;
+    pjob->arg = (void *)args;
     pjob->next == NULL;
+    pjob->prev == NULL;
+    printf("my job\n");
+
     if (pool->head == NULL)
     {
         pool->head = pool->tail = pjob;
+        printf("get the good\n");
         pthread_cond_broadcast(&pool->queue_not_empty);
     }
     else

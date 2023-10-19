@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.m": "matlab",
-        "async.h": "c"
+        "async.h": "c",
+        "stdio.h": "c"
     }
 }
