@@ -23,10 +23,9 @@ void *foo(void *t)
         }
 
         web_job = pool.head; // fetch the job
-        pool.cur_num--;      // update the queue number
 
         /* after fetching, update the pool */
-        if (web_job->next_pt == NULL) // if the queue is empty
+        if (web_job->next_pt == NULL) // if the queue will be empty
         {
             pool.head = NULL; // empty the head
             pool.tail = NULL; // empty the tail
@@ -36,9 +35,12 @@ void *foo(void *t)
         {
             pool.head = web_job->next_pt;     // update the head item
             web_job->next_pt->prev_pt = NULL; // update the head's prev
+            pthread_cond_broadcast(&pool.not_empty);
         }
 
         web_job->hanlder(web_job->args); // do the job
+
+        pool.cur_num--; // update the queue number
 
         /* free the memory of the job */
         free(web_job);
@@ -85,7 +87,6 @@ void async_run(void (*hanlder)(int), int args)
     {
         pool.head = web_job;
         pool.tail = web_job;
-        pthread_cond_broadcast(&pool.not_empty);
     }
     else // if the queue is not empty
     {
@@ -93,6 +94,7 @@ void async_run(void (*hanlder)(int), int args)
         pool.tail->next_pt = web_job;
         pool.tail = web_job;
     }
+    pthread_cond_broadcast(&pool.not_empty);
 
     /* update the queue number */
     pool.cur_num++;
